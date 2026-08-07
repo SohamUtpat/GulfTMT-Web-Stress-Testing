@@ -1,0 +1,7 @@
+# Generated tokens / secrets — do not commit
+data/tokens.json
+data/admin-token.json
+data/admin-credentials.json
+
+# Local env overrides
+.env
