@@ -1,15 +1,34 @@
 import ws from 'k6/ws';
 import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
-import { Counter, Trend } from 'k6/metrics';
+import { Counter, Trend, Rate } from 'k6/metrics';
 import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
+import { createSendErrorTracker } from './lib/ws-send-error.js';
+import { parseK6DurationMs, rampingScenarioDurationMs } from './lib/k6-scenario.js';
+import {
+    firstSendDelayMs,
+    parseSendOrder,
+    parseSendStaggerMs,
+    sequentialAlignAfterMs,
+    sequentialTailMs,
+} from './lib/send-order.js';
+import { correlateOwnEcho, formatUidRewriteLog } from './lib/echo-correlation.js';
+import { assertVuUsersAreGroupMembers } from './lib/group-membership.js';
 
 /**
  * STOMP over WebSocket — dynamic group chat load test.
  *
  * One script for any user count (up to tokens in users_result.json).
  * Pass VUS / HOLD / MODE at run time — no need to edit stages.
+ *
+ * Echo correlation (same rules at every load size): SIMPLE / root usually
+ * keeps the client uniqueMessageId. If the echo's uniqueMessageId differs
+ * or is omitted, match senderId + content and still count the WS echo.
+ * Store the server uniqueMessageId / Mongo id from that payload when present.
+ *
+ * Point 7: setup() fails fast unless every VU user is a member of groupId
+ * (override with -e CHECK_GROUP_MEMBERSHIP=false).
  *
  * Destinations (from chat-service / mobile):
  *   SEND:      /app/chat/groupMessage
@@ -33,13 +52,28 @@ import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
  *   HOLD             Time spent at peak VUs (default 4m).
  *   MODE             continuous | once (default continuous).
  *   MSG_INTERVAL_MS  Send interval for continuous mode (default 3000).
+ *   SEND_ORDER       parallel | sequential (default parallel / burst).
+ *                    parallel   — every VU sends as soon as it is connected.
+ *                    sequential — VU 1 posts, then VU 2, then VU 3.
+ *   SEND_STAGGER_MS  Gap between sequential first sends (default 300).
  *   VU_HOLD_MS       How long each VU keeps the WS open per iteration
- *                    (default: 55000 continuous, 240000 once).
+ *                    (default: 55000 continuous, 240000 once; sequential
+ *                    adds ramp-up + last-VU stagger so the last user can send).
+ *                    Not auto-capped to scenario length; if it is longer, k6
+ *                    teardown Session closed / 1002 is excluded from
+ *                    ws_send_error_rate and a startup warning is logged.
  *   RAMP_STYLE       scaled | simple (default scaled).
  *                    scaled  = same shape as 500-user scripts (20%→40%→80%→100%).
  *                    simple  = single ramp-up → hold → ramp-down.
  *   RAMP_UP          Used when RAMP_STYLE=simple (default 5m).
  *   RAMP_DOWN        Used when RAMP_STYLE=simple (default 3m).
+ *   STOMP_CONNECT_RATE_MIN  Min STOMP CONNECTED / connect attempts (default 0.95).
+ *   ECHO_RATE_MIN           Min own-echoes / messages whose echo was resolved
+ *                           (received, or pending >10s at disconnect) (default 0.90).
+ *   SEND_ERROR_RATE_MAX     Max real send/STOMP errors / (successful chat
+ *                           sends + those errors) (default 0.05). Teardown
+ *                           Session closed / WS 1002 do not count.
+ *   MSG_RTT_P95_MS          Optional p95 send→echo SLO (ms). Unset/0 = disabled.
  */
 
 const users = new SharedArray('users', function () {
@@ -65,19 +99,63 @@ const groupChat = JSON.parse(open('../data/group-chat.json'));
 const VUS = Number(__ENV.VUS || 500);
 const HOLD = __ENV.HOLD || '4m';
 const MODE = String(__ENV.MODE || 'continuous').toLowerCase();
-const RAMP_STYLE = String(__ENV.RAMP_STYLE || 'scaled').toLowerCase();
-const RAMP_UP = __ENV.RAMP_UP || '5m';
-const RAMP_DOWN = __ENV.RAMP_DOWN || '3m';
+const SEND_ORDER = parseSendOrder(__ENV.SEND_ORDER);
+const SEND_STAGGER_MS = parseSendStaggerMs(__ENV.SEND_STAGGER_MS, 300);
+const sequentialDefaultRamp = SEND_ORDER === 'sequential' && !__ENV.RAMP_STYLE;
+const RAMP_STYLE = String(
+    __ENV.RAMP_STYLE || (SEND_ORDER === 'sequential' ? 'simple' : 'scaled')
+).toLowerCase();
+const RAMP_UP = __ENV.RAMP_UP || (sequentialDefaultRamp ? '10s' : '5m');
+const RAMP_DOWN = __ENV.RAMP_DOWN || (sequentialDefaultRamp ? '15s' : '3m');
 const MSG_INTERVAL_MS = Number(__ENV.MSG_INTERVAL_MS || 3000);
+const ALIGN_AFTER_MS = sequentialAlignAfterMs(RAMP_STYLE, RAMP_UP);
+const SEQUENTIAL_TAIL_MS = sequentialTailMs(SEND_ORDER, VUS, SEND_STAGGER_MS);
 const VU_HOLD_MS = Number(
-    __ENV.VU_HOLD_MS || (MODE === 'once' ? 240000 : 55000)
+    __ENV.VU_HOLD_MS ||
+        (MODE === 'once' ? 240000 : 55000) +
+            (SEND_ORDER === 'sequential' ? ALIGN_AFTER_MS + SEQUENTIAL_TAIL_MS : 0)
 );
+const GRACEFUL_RAMP_DOWN = MODE === 'once' ? '60s' : '30s';
+const SCENARIO_DURATION_MS = rampingScenarioDurationMs({
+    rampStyle: RAMP_STYLE,
+    hold: HOLD,
+    rampUp: RAMP_UP,
+    rampDown: RAMP_DOWN,
+    gracefulRampDown: GRACEFUL_RAMP_DOWN,
+});
+
+/** Accept 0–1 or percent (e.g. 95 → 0.95). */
+function parseUnitRate(envVal, fallback) {
+    const n = Number(envVal);
+    if (!Number.isFinite(n)) {
+        return fallback;
+    }
+    if (n > 1) {
+        return Math.min(1, n / 100);
+    }
+    if (n < 0) {
+        return fallback;
+    }
+    return n;
+}
+
+const STOMP_CONNECT_RATE_MIN = parseUnitRate(__ENV.STOMP_CONNECT_RATE_MIN, 0.95);
+const ECHO_RATE_MIN = parseUnitRate(__ENV.ECHO_RATE_MIN, 0.9);
+const SEND_ERROR_RATE_MAX = parseUnitRate(__ENV.SEND_ERROR_RATE_MAX, 0.05);
+const MSG_RTT_P95_MS = Number(__ENV.MSG_RTT_P95_MS || 0);
 
 if (!Number.isFinite(VUS) || VUS < 1) {
     throw new Error(`Invalid VUS=${__ENV.VUS}. Use a positive number (e.g. -e VUS=1000).`);
 }
 if (MODE !== 'continuous' && MODE !== 'once') {
     throw new Error(`Invalid MODE=${MODE}. Use continuous or once.`);
+}
+if (SEQUENTIAL_TAIL_MS > 20 * 60 * 1000) {
+    throw new Error(
+        `SEND_ORDER=sequential with VUS=${VUS} and SEND_STAGGER_MS=${SEND_STAGGER_MS} ` +
+            `would take ~${Math.round(SEQUENTIAL_TAIL_MS / 60000)}m for the last user. ` +
+            `Use -e SEND_ORDER=parallel for load tests, or lower VUS / SEND_STAGGER_MS.`
+    );
 }
 if (users.length === 0) {
     throw new Error('No users in data/users_result.json — provide sender_token entries');
@@ -128,8 +206,32 @@ const messagesSent = new Counter('ws_group_messages_sent');
 const messagesReceived = new Counter('ws_group_messages_received');
 const ownEchoesReceived = new Counter('ws_group_own_echoes_received');
 const sendErrors = new Counter('ws_send_errors');
+const teardownCloses = new Counter('ws_teardown_closes');
+const sessionClosedErrors = new Counter('ws_session_closed_errors');
+const uidRewrites = new Counter('ws_echo_uid_rewritten');
 const messageLatency = new Trend('ws_group_message_roundtrip_ms', true);
 const sessionDurationMs = new Trend('ws_group_session_hold_ms', true);
+// Rates — these are the pass/fail gates (not count>0).
+// ws_stomp_connect_rate: STOMP CONNECTED / VU iterations that attempted ws.connect
+const stompConnectRate = new Rate('ws_stomp_connect_rate');
+// ws_group_echo_rate: own echoes received / (echoes received + still pending at close)
+const echoRate = new Rate('ws_group_echo_rate');
+// ws_send_error_rate: real chat SEND / STOMP / WS errors during active messaging
+// / (successful chat sends + those errors). Teardown Session closed / 1002
+// go to ws_teardown_closes and do not fail this gate.
+const sendErrorRate = new Rate('ws_send_error_rate');
+
+function buildThresholds() {
+    const thresholds = {
+        ws_stomp_connect_rate: [`rate>=${STOMP_CONNECT_RATE_MIN}`],
+        ws_group_echo_rate: [`rate>=${ECHO_RATE_MIN}`],
+        ws_send_error_rate: [`rate<${SEND_ERROR_RATE_MAX}`],
+    };
+    if (MSG_RTT_P95_MS > 0) {
+        thresholds.ws_group_message_roundtrip_ms = [`p(95)<${MSG_RTT_P95_MS}`];
+    }
+    return thresholds;
+}
 
 export const options = {
     scenarios: {
@@ -137,21 +239,58 @@ export const options = {
             executor: 'ramping-vus',
             startVUs: 0,
             stages: buildStages(VUS),
-            gracefulRampDown: MODE === 'once' ? '60s' : '30s',
+            gracefulRampDown: GRACEFUL_RAMP_DOWN,
         },
     },
-    thresholds: {
-        ws_stomp_connected: ['count>0'],
-        ws_group_messages_sent: ['count>0'],
-    },
+    thresholds: buildThresholds(),
+    setupTimeout: '3m',
 };
+
+export function setup() {
+    assertVuUsersAreGroupMembers({
+        users: users,
+        groupId: groupChat.groupId,
+        wsUrl: groupChat.wsUrl,
+        vus: VUS,
+    });
+    return {};
+}
 
 // Log config once at init (VU 0 context)
 console.log(
     `ws-group-message-dynamic | VUS=${VUS} HOLD=${HOLD} MODE=${MODE} ` +
+        `SEND_ORDER=${SEND_ORDER} SEND_STAGGER_MS=${SEND_STAGGER_MS} ` +
         `RAMP_STYLE=${RAMP_STYLE} MSG_INTERVAL_MS=${MSG_INTERVAL_MS} ` +
-        `VU_HOLD_MS=${VU_HOLD_MS} tokens=${users.length}`
+        `VU_HOLD_MS=${VU_HOLD_MS} scenario~${SCENARIO_DURATION_MS}ms tokens=${users.length} | ` +
+        `gates: connect>=${STOMP_CONNECT_RATE_MIN} echo>=${ECHO_RATE_MIN} ` +
+        `send_err<${SEND_ERROR_RATE_MAX}` +
+        (MSG_RTT_P95_MS > 0 ? ` msg_p95<${MSG_RTT_P95_MS}ms` : ' msg_p95=off')
 );
+if (SEND_ORDER === 'sequential') {
+    console.log(
+        `SEND_ORDER=sequential | first SENDs start after ${ALIGN_AFTER_MS}ms ramp, ` +
+            `then ${SEND_STAGGER_MS}ms apart (last VU ~${SEQUENTIAL_TAIL_MS}ms later). ` +
+            `Use -e SEND_ORDER=parallel for a concurrent burst.`
+    );
+}
+if (
+    SEND_ORDER === 'sequential' &&
+    parseK6DurationMs(HOLD, 0) > 0 &&
+    SEQUENTIAL_TAIL_MS > parseK6DurationMs(HOLD, 0)
+) {
+    console.log(
+        `WARNING: sequential wave ~${SEQUENTIAL_TAIL_MS}ms exceeds HOLD=${HOLD}. ` +
+            `Raise HOLD or lower VUS / SEND_STAGGER_MS so every user can send.`
+    );
+}
+if (VU_HOLD_MS > SCENARIO_DURATION_MS) {
+    console.log(
+        `WARNING: VU_HOLD_MS=${VU_HOLD_MS} exceeds scenario length ~${SCENARIO_DURATION_MS}ms. ` +
+            `k6 will close sockets at scenario end; Session closed / WS 1002 are ` +
+            `excluded from ws_send_error_rate (see ws_teardown_closes). ` +
+            `Set VU_HOLD_MS shorter than the scenario if you want a clean STOMP DISCONNECT.`
+    );
+}
 
 /**
  * STOMP content-length must be UTF-8 byte count, not JS string.length.
@@ -210,9 +349,27 @@ function getUser() {
     return users[(__VU - 1) % users.length];
 }
 
+function scheduleFirstSend(socket, sendFn) {
+    const delay = firstSendDelayMs(SEND_ORDER, SEND_STAGGER_MS, __VU, ALIGN_AFTER_MS);
+    if (shouldLog() && SEND_ORDER === 'sequential') {
+        console.log(`VU${__VU} sequential first SEND in ${delay}ms`);
+    }
+    if (delay >= VU_HOLD_MS) {
+        console.log(
+            `VU${__VU} WARNING: sequential delay ${delay}ms >= VU_HOLD_MS=${VU_HOLD_MS}; ` +
+                `this VU may disconnect before sending.`
+        );
+    }
+    if (delay > 0) {
+        socket.setTimeout(sendFn, delay);
+        return;
+    }
+    sendFn();
+}
+
 function shouldLog() {
-    // Keep logs light at high VU counts
-    const step = VUS >= 5000 ? 500 : VUS >= 1000 ? 100 : 50;
+    // Keep logs light at high VU counts (including ~30k)
+    const step = VUS >= 10000 ? 1000 : VUS >= 5000 ? 500 : VUS >= 1000 ? 100 : 50;
     return __VU <= 5 || __VU % step === 0;
 }
 
@@ -273,6 +430,7 @@ export default function () {
     const url = `${groupChat.wsUrl}?at=${encodeURIComponent('Bearer ' + token)}`;
 
     let connected = false;
+    let stompConnected = false;
     let subscribedUserQueue = false;
     let subscribedGroupQueue = false;
     let seq = 0;
@@ -283,6 +441,16 @@ export default function () {
     let sessionStartMs = 0;
     let sessionEndMs = 0;
     const pendingSends = {};
+
+    const errTracker = createSendErrorTracker({
+        sendErrors: sendErrors,
+        sendErrorRate: sendErrorRate,
+        teardownCloses: teardownCloses,
+        sessionClosedErrors: sessionClosedErrors,
+        shouldLog: shouldLog,
+        vus: VUS,
+        vu: __VU,
+    });
 
     const res = ws.connect(
         url,
@@ -308,6 +476,7 @@ export default function () {
 
                 if (text.indexOf('CONNECTED') === 0) {
                     connected = true;
+                    stompConnected = true;
                     sessionStartMs = Date.now();
                     wsConnected.add(1);
                     if (shouldLog()) {
@@ -334,63 +503,67 @@ export default function () {
                     );
                     subscribedGroupQueue = true;
 
-                    if (MODE === 'once') {
-                        // Exactly one SEND per VU (same behaviour as 500-users-once)
-                        if (!sentOnce) {
-                            sentOnce = true;
-                            alreadySent = true;
-
-                            const payload = buildGroupMessage(user, 1);
-                            pendingSends[payload.uniqueMessageId] = Date.now();
-
-                            try {
-                                sendStompJson(socket, '/app/chat/groupMessage', payload);
-                                messagesSent.add(1);
-                                if (shouldLog()) {
-                                    console.log(
-                                        `VU${__VU} SENT once | ${payload.content.substring(0, 60)}`
-                                    );
-                                }
-                            } catch (e) {
-                                sendErrors.add(1);
-                                console.log(`VU${__VU} SEND ERROR: ${e}`);
-                                alreadySent = false;
-                                sentOnce = false;
-                            }
-                        }
-                        return;
-                    }
-
-                    // continuous — send on interval (same behaviour as 500-users)
-                    socket.setInterval(function () {
+                    function sendChatMessage() {
                         if (!connected) {
                             return;
                         }
+                        if (MODE === 'once' && sentOnce) {
+                            return;
+                        }
                         seq += 1;
-                        const payload = buildGroupMessage(user, seq);
-                        pendingSends[payload.uniqueMessageId] = Date.now();
+                        if (MODE === 'once') {
+                            sentOnce = true;
+                            alreadySent = true;
+                        }
+                        const payload = buildGroupMessage(user, MODE === 'once' ? 1 : seq);
+                        pendingSends[payload.uniqueMessageId] = {
+                            kind: 'root',
+                            sentAt: Date.now(),
+                            content: payload.content,
+                            senderId: payload.senderId,
+                            parentId: '',
+                            outboundUid: payload.uniqueMessageId,
+                            timedOut: false,
+                        };
 
                         try {
                             sendStompJson(socket, '/app/chat/groupMessage', payload);
                             messagesSent.add(1);
-                            if ((seq === 1 || seq % 10 === 0) && shouldLog()) {
+                            sendErrorRate.add(0);
+                            if (shouldLog() && (MODE === 'once' || seq === 1 || seq % 10 === 0)) {
                                 console.log(
-                                    `VU${__VU} SENT #${seq} | ${payload.content.substring(0, 60)}`
+                                    MODE === 'once'
+                                        ? `VU${__VU} SENT once | ${payload.content.substring(0, 60)}`
+                                        : `VU${__VU} SENT #${seq} | ${payload.content.substring(0, 60)}`
                                 );
                             }
                         } catch (e) {
-                            sendErrors.add(1);
-                            console.log(`VU${__VU} SEND ERROR: ${e}`);
+                            errTracker.onSendThrow(e);
+                            if (MODE === 'once') {
+                                alreadySent = false;
+                                sentOnce = false;
+                            }
                         }
-                    }, MSG_INTERVAL_MS);
+                    }
+
+                    if (MODE === 'once' || SEND_ORDER === 'sequential') {
+                        scheduleFirstSend(socket, function () {
+                            sendChatMessage();
+                            if (MODE === 'continuous' && connected) {
+                                socket.setInterval(sendChatMessage, MSG_INTERVAL_MS);
+                            }
+                        });
+                    } else {
+                        socket.setInterval(sendChatMessage, MSG_INTERVAL_MS);
+                    }
 
                     return;
                 }
 
                 if (text.indexOf('ERROR') === 0) {
-                    hadStompError = true;
-                    sendErrors.add(1);
-                    console.log(`VU${__VU} STOMP ERROR: ${text.substring(0, 300)}`);
+                    if (errTracker.onStompError(text)) {
+                        hadStompError = true;
+                    }
                     return;
                 }
 
@@ -402,31 +575,31 @@ export default function () {
                         const msgBody = text.substring(bodyIdx + 2).replace(/\0/g, '');
                         try {
                             const parsed = JSON.parse(msgBody);
-                            const key = parsed.uniqueMessageId;
-                            const matchedPending = key && pendingSends[key];
-                            // Fallback: once-mode echo may omit uniqueMessageId but still carry senderId
-                            const matchedSender =
-                                !matchedPending &&
-                                sentOnce &&
-                                !receivedOwnEcho &&
-                                parsed.senderId === user.userId &&
-                                Object.keys(pendingSends).length > 0;
+                            const result = correlateOwnEcho(parsed, {
+                                pendingByUid: pendingSends,
+                                userId: user.userId,
+                                phase: 'wait-root',
+                            });
+                            if (!result) {
+                                return;
+                            }
 
-                            if (matchedPending || matchedSender) {
-                                if (matchedPending) {
-                                    messageLatency.add(Date.now() - pendingSends[key]);
-                                    delete pendingSends[key];
-                                } else {
-                                    // clear any pending once we accept sender-matched echo
-                                    for (const k of Object.keys(pendingSends)) {
-                                        messageLatency.add(Date.now() - pendingSends[k]);
-                                        delete pendingSends[k];
-                                    }
+                            const pending = result.pending;
+                            const sentAt = pending.sentAt || Date.now();
+                            messageLatency.add(Date.now() - sentAt);
+                            delete pendingSends[result.pendingKey];
+
+                            if (result.uidRewritten) {
+                                uidRewrites.add(1);
+                                if (shouldLog()) {
+                                    console.log(formatUidRewriteLog(__VU, parsed, result));
                                 }
-                                if (!receivedOwnEcho) {
-                                    receivedOwnEcho = true;
-                                    ownEchoesReceived.add(1);
-                                }
+                            }
+
+                            echoRate.add(true);
+                            if (!receivedOwnEcho) {
+                                receivedOwnEcho = true;
+                                ownEchoesReceived.add(1);
                             }
                         } catch (e) {
                             // non-JSON or partial frame — ignore for latency
@@ -436,14 +609,23 @@ export default function () {
             });
 
             socket.on('error', function (e) {
-                console.log(`VU${__VU} WS error: ${e}`);
-                sendErrors.add(1);
+                errTracker.onWsError(e);
             });
 
             socket.on('close', function () {
+                connected = false;
                 sessionEndMs = Date.now();
                 if (sessionStartMs > 0) {
                     sessionDurationMs.add(sessionEndMs - sessionStartMs);
+                }
+                for (const k of Object.keys(pendingSends)) {
+                    const pending = pendingSends[k];
+                    const sentAt = pending && pending.sentAt != null ? pending.sentAt : pending;
+                    const ageMs = sessionEndMs - sentAt;
+                    if (ageMs >= 10000) {
+                        echoRate.add(false);
+                    }
+                    delete pendingSends[k];
                 }
                 if (shouldLog()) {
                     console.log(
@@ -455,8 +637,13 @@ export default function () {
 
             socket.setTimeout(function () {
                 intentionalClose = true;
+                errTracker.beginShutdown();
                 if (connected) {
-                    socket.send(stompFrame('DISCONNECT', { receipt: `rcpt-${__VU}` }));
+                    try {
+                        socket.send(stompFrame('DISCONNECT', { receipt: `rcpt-${__VU}` }));
+                    } catch (e) {
+                        // Closing socket — do not count as a chat send failure.
+                    }
                 }
                 socket.close();
             }, VU_HOLD_MS);
@@ -466,6 +653,8 @@ export default function () {
     const wsOk = check(res, {
         'WS status 101': (r) => r && r.status === 101,
     });
+
+    stompConnectRate.add(stompConnected);
 
     if (!wsOk && shouldLog()) {
         console.log(
@@ -479,12 +668,12 @@ export default function () {
     const minHoldMs = Math.min(30000, Math.floor(VU_HOLD_MS * 0.5));
 
     const checks = {
-        'STOMP connected': () => connected,
+        'STOMP connected': () => stompConnected,
         'Subscribed /user/queue/reply': () => subscribedUserQueue,
         'Subscribed /user/{groupId}/queue/reply': () => subscribedGroupQueue,
-        'No STOMP ERROR': () => connected && !hadStompError,
+        'No STOMP ERROR': () => !hadStompError,
         'Session held after connect': () =>
-            !connected || intentionalClose || heldMs >= minHoldMs,
+            !stompConnected || intentionalClose || heldMs >= minHoldMs,
     };
     if (MODE === 'once') {
         checks['Sent one message'] = () => sentOnce || alreadySent;

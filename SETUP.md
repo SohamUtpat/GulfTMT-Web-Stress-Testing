@@ -7,7 +7,9 @@ Runs a WebSocket group-chat load test using pre-exported users and tokens.
 - [k6](https://k6.io/docs/get-started/installation/) installed
 - `data/users_result.json` — 500 users with login tokens (`sender_id`, `sender_name`, `user_code`, `sender_token`)
 - `data/group-chat.json` — group / conversation / WS URL
-- Stress-test users should be **members** of the target group
+- Stress-test users must be **members** of the target group (Point 7).
+  - SQL: `data/sql/ensure-stress-users-in-test-group.sql`
+  - k6 fail-fast: both load scripts check in `setup()`, or run `k6 run -e VUS=500 Scripts/check-group-membership.js`
 
 ## Run (recommended — 500 users hybrid)
 
