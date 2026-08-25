@@ -1,6 +1,6 @@
 {
-  "groupId": "0a14c4b7-2a03-419d-a32a-60df68e7d5dc",
-  "conversationId": "6a899d67a4ee317eedfd89f4",
+  "groupId": "f53e6d72-b2bc-4600-840d-e0cf464749ff",
+  "conversationId": "6a8d40797716d82c4a255424",
   "receiverName": "test",
   "wsUrl": "wss://ntmt.uat.gulftmt.com/api/chat-service/chat"
 }
