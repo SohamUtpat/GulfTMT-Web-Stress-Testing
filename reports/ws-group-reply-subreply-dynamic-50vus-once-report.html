@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Test Report: 2026-08-22 22:40</title>
+    <title>Test Report: 2026-08-24 13:42</title>
     <style>
       * {
         margin: 0;
@@ -473,7 +473,7 @@
       <header>
         <h1>
           <svg width="50" height="45" viewBox="0 0 50 45" fill="none"><path d="M31.968 34.681a2.007 2.007 0 002.011-2.003c0-1.106-.9-2.003-2.011-2.003a2.007 2.007 0 00-2.012 2.003c0 1.106.9 2.003 2.012 2.003z" fill="white"></path><path d="M39.575 0L27.154 16.883 16.729 9.31 0 45h50L39.575 0zM23.663 37.17l-2.97-4.072v4.072h-2.751V22.038l2.75 1.989v7.66l3.659-5.014 2.086 1.51-3.071 4.21 3.486 4.776h-3.189v.001zm8.305.17c-2.586 0-4.681-2.088-4.681-4.662 0-1.025.332-1.972.896-2.743l4.695-6.435 2.086 1.51-2.239 3.07a4.667 4.667 0 013.924 4.6c0 2.572-2.095 4.66-4.681 4.66z" fill="white"></path></svg>
-          Test Report: 2026-08-22 22:40
+          Test Report: 2026-08-24 13:42
         </h1>
       </header>
 
@@ -484,23 +484,29 @@
             <i class="fas fa-globe icon"></i>
             <h4>Total Requests</h4>
             <div class="metric-value">
-              
+              302
               
             </div>
           </div>
           
+          
+            <div class="metric-card success">
+              <i class="fas fa-check-circle icon"></i>
+              <h4>Failed Requests</h4>
+              <div class="metric-value">0</div>
+            </div> 
             
           
-          <div class="metric-card success">
+          <div class="metric-card danger">
             <i class="fas fa-exclamation-triangle icon"></i>
             <h4>Breached Thresholds</h4>
-            <div class="metric-value">0</div>
+            <div class="metric-value">2</div>
           </div>
           
           <div class="metric-card danger">
             <i class="fas fa-eye icon"></i>
             <h4>Failed Checks</h4>
-            <div class="metric-value">8</div>
+            <div class="metric-value">132</div>
           </div>
         </div>
 
@@ -534,121 +540,240 @@
                 <tbody>
                   
                   <tr>
+                    <td><b>http_req_blocked</b></td>
+                    
+                      <td class="">0.71</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">211.72</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.00</td>
+                     
+                  </tr>
+                  
+                  <tr>
+                    <td><b>http_req_connecting</b></td>
+                    
+                      <td class="">0.18</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">54.91</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.00</td>
+                     
+                  </tr>
+                  
+                  <tr>
+                    <td><b>http_req_duration</b></td>
+                    
+                      <td class="">236.65</td>
+                    
+                      <td class="">173.48</td>
+                    
+                      <td class="">211.02</td>
+                    
+                      <td class="">877.90</td>
+                    
+                      <td class="">301.49</td>
+                    
+                      <td class="">314.93</td>
+                     
+                  </tr>
+                  
+                  <tr>
+                    <td><b>http_req_receiving</b></td>
+                    
+                      <td class="">13.56</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.84</td>
+                    
+                      <td class="">651.73</td>
+                    
+                      <td class="">54.09</td>
+                    
+                      <td class="">60.26</td>
+                     
+                  </tr>
+                  
+                  <tr>
+                    <td><b>http_req_sending</b></td>
+                    
+                      <td class="">0.05</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">1.11</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.58</td>
+                     
+                  </tr>
+                  
+                  <tr>
+                    <td><b>http_req_tls_handshaking</b></td>
+                    
+                      <td class="">0.24</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">72.91</td>
+                    
+                      <td class="">0.00</td>
+                    
+                      <td class="">0.00</td>
+                     
+                  </tr>
+                  
+                  <tr>
+                    <td><b>http_req_waiting</b></td>
+                    
+                      <td class="">223.05</td>
+                    
+                      <td class="">172.31</td>
+                    
+                      <td class="">204.38</td>
+                    
+                      <td class="">408.04</td>
+                    
+                      <td class="">298.42</td>
+                    
+                      <td class="">301.58</td>
+                     
+                  </tr>
+                  
+                  <tr>
                     <td><b>iteration_duration</b></td>
                     
-                      <td class="">7754.52</td>
+                      <td class="">55273.98</td>
                     
-                      <td class="">5000.00</td>
+                      <td class="">5000.38</td>
                     
-                      <td class="">5000.60</td>
+                      <td class="">67164.25</td>
                     
-                      <td class="">147044.57</td>
+                      <td class="">112208.44</td>
                     
-                      <td class="">5001.62</td>
+                      <td class="">103793.37</td>
                     
-                      <td class="">5006.97</td>
+                      <td class="">110620.03</td>
                      
                   </tr>
                   
                   <tr>
                     <td><b>ws_connecting</b></td>
                     
-                      <td class="">1087.86</td>
+                      <td class="">260.74</td>
                     
-                      <td class="">485.82</td>
+                      <td class="">198.35</td>
                     
-                      <td class="">653.20</td>
+                      <td class="">251.66</td>
                     
-                      <td class="">21020.24</td>
+                      <td class="">405.25</td>
                     
-                      <td class="">920.85</td>
+                      <td class="">307.64</td>
                     
-                      <td class="">1080.04</td>
+                      <td class="">337.54</td>
                      
                   </tr>
                   
                   <tr>
                     <td><b>ws_group_message_roundtrip_ms</b></td>
                     
-                      <td class="">19136.01</td>
+                      <td class="">25078.29</td>
                     
-                      <td class="">251.00</td>
+                      <td class="">128.00</td>
                     
-                      <td class="">17264.50</td>
+                      <td class="">27285.00</td>
                     
-                      <td class="">57914.00</td>
+                      <td class="">58444.00</td>
                     
-                      <td class="">41394.10</td>
+                      <td class="">39119.40</td>
                     
-                      <td class="">48594.60</td>
+                      <td class="">52732.50</td>
                      
                   </tr>
                   
                   <tr>
                     <td><b>ws_group_reply_roundtrip_ms</b></td>
                     
-                      <td class="">14272.70</td>
+                      <td class="">24850.89</td>
                     
-                      <td class="">627.00</td>
+                      <td class="">763.00</td>
                     
-                      <td class="">16882.00</td>
+                      <td class="">27379.00</td>
                     
-                      <td class="">24910.00</td>
+                      <td class="">39933.00</td>
                     
-                      <td class="">22706.50</td>
+                      <td class="">37718.20</td>
                     
-                      <td class="">23268.70</td>
+                      <td class="">38394.00</td>
                      
                   </tr>
                   
                   <tr>
                     <td><b>ws_group_root_roundtrip_ms</b></td>
                     
-                      <td class="">29032.58</td>
+                      <td class="">22751.50</td>
                     
-                      <td class="">251.00</td>
+                      <td class="">128.00</td>
                     
-                      <td class="">30929.50</td>
+                      <td class="">18373.00</td>
                     
-                      <td class="">57914.00</td>
+                      <td class="">58444.00</td>
                     
-                      <td class="">51029.90</td>
+                      <td class="">52971.00</td>
                     
-                      <td class="">56050.80</td>
+                      <td class="">56105.70</td>
                      
                   </tr>
                   
                   <tr>
                     <td><b>ws_group_subreply_roundtrip_ms</b></td>
                     
-                      <td class="">14102.76</td>
+                      <td class="">28187.74</td>
                     
-                      <td class="">1253.00</td>
+                      <td class="">2825.00</td>
                     
-                      <td class="">14946.00</td>
+                      <td class="">33612.00</td>
                     
-                      <td class="">24427.00</td>
+                      <td class="">39425.00</td>
                     
-                      <td class="">22561.80</td>
+                      <td class="">39050.60</td>
                     
-                      <td class="">23108.65</td>
+                      <td class="">39344.80</td>
                      
                   </tr>
                   
                   <tr>
                     <td><b>ws_session_duration</b></td>
                     
-                      <td class="">109227.94</td>
+                      <td class="">77371.69</td>
                     
-                      <td class="">21020.85</td>
+                      <td class="">60744.53</td>
                     
-                      <td class="">116061.55</td>
+                      <td class="">68937.13</td>
                     
-                      <td class="">146043.45</td>
+                      <td class="">111207.55</td>
                     
-                      <td class="">142279.53</td>
+                      <td class="">109048.62</td>
                     
-                      <td class="">143554.48</td>
+                      <td class="">110128.39</td>
                      
                   </tr>
                   
@@ -670,14 +795,25 @@
                 <tbody>
                   
                   <tr>
+                    <td><b>http_req_failed</b></td>
+                    
+                      <td
+                        class=""
+                        title="Failure rate (for *_failed metrics; aligns with Fail Count)"
+                      >0.00%</td>
+                      <td class="">302.00</td>
+                      <td class="">0.00</td>
+                  </tr>
+                  
+                  <tr>
                     <td><b>ws_parent_timeout_rate</b></td>
                     
                       <td
-                        class="good"
+                        class="failed"
                         title="Success rate (aligns with Pass Count)"
-                      >0.00%</td>
-                      <td class="">0.00</td>
-                      <td class="">150.00</td>
+                      >21.78%</td>
+                      <td class="">22.00</td>
+                      <td class="">79.00</td>
                   </tr>
                   
                   <tr>
@@ -688,7 +824,7 @@
                         title="Success rate (aligns with Pass Count)"
                       >0.00%</td>
                       <td class="">0.00</td>
-                      <td class="">150.00</td>
+                      <td class="">106.00</td>
                   </tr>
                   
                   <tr>
@@ -697,20 +833,20 @@
                       <td
                         class="good"
                         title="Success rate (aligns with Pass Count)"
-                      >98.04%</td>
-                      <td class="">50.00</td>
-                      <td class="">1.00</td>
+                      >100.00%</td>
+                      <td class="">37.00</td>
+                      <td class="">0.00</td>
                   </tr>
                   
                   <tr>
                     <td><b>ws_thread_cycle_ok</b></td>
                     
                       <td
-                        class="good"
+                        class="failed"
                         title="Success rate (aligns with Pass Count)"
-                      >100.00%</td>
-                      <td class="">50.00</td>
-                      <td class="">0.00</td>
+                      >51.11%</td>
+                      <td class="">23.00</td>
+                      <td class="">22.00</td>
                   </tr>
                   
                 </tbody>
@@ -729,10 +865,26 @@
                 <tbody>
                   
                   <tr>
+                    <td><b>ws_echo_uid_rewritten</b></td>
+                    
+                    
+                      <td class="">51.00</td>
+                      
+                  </tr>
+                  
+                  <tr>
                     <td><b>ws_group_messages_received</b></td>
                     
                     
-                      <td class="">4721.00</td>
+                      <td class="">2931.00</td>
+                      
+                  </tr>
+                  
+                  <tr>
+                    <td><b>ws_group_replies_matched</b></td>
+                    
+                    
+                      <td class="">28.00</td>
                       
                   </tr>
                   
@@ -740,7 +892,15 @@
                     <td><b>ws_group_replies_sent</b></td>
                     
                     
-                      <td class="">50.00</td>
+                      <td class="">28.00</td>
+                      
+                  </tr>
+                  
+                  <tr>
+                    <td><b>ws_group_roots_matched</b></td>
+                    
+                    
+                      <td class="">28.00</td>
                       
                   </tr>
                   
@@ -753,10 +913,18 @@
                   </tr>
                   
                   <tr>
+                    <td><b>ws_group_subreplies_matched</b></td>
+                    
+                    
+                      <td class="">23.00</td>
+                      
+                  </tr>
+                  
+                  <tr>
                     <td><b>ws_group_subreplies_sent</b></td>
                     
                     
-                      <td class="">50.00</td>
+                      <td class="">28.00</td>
                       
                   </tr>
                   
@@ -764,7 +932,7 @@
                     <td><b>ws_msgs_received</b></td>
                     
                     
-                      <td class="">4868.00</td>
+                      <td class="">3016.00</td>
                       
                   </tr>
                   
@@ -772,7 +940,7 @@
                     <td><b>ws_msgs_sent</b></td>
                     
                     
-                      <td class="">300.00</td>
+                      <td class="">256.00</td>
                       
                   </tr>
                   
@@ -780,7 +948,7 @@
                     <td><b>ws_session_closed_errors</b></td>
                     
                     
-                      <td class="">50.00</td>
+                      <td class="">37.00</td>
                       
                   </tr>
                   
@@ -788,7 +956,7 @@
                     <td><b>ws_sessions</b></td>
                     
                     
-                      <td class="">51.00</td>
+                      <td class="">50.00</td>
                       
                   </tr>
                   
@@ -804,7 +972,15 @@
                     <td><b>ws_teardown_closes</b></td>
                     
                     
-                      <td class="">96.00</td>
+                      <td class="">72.00</td>
+                      
+                  </tr>
+                  
+                  <tr>
+                    <td><b>ws_thread_parent_timeouts</b></td>
+                    
+                    
+                      <td class="">22.00</td>
                       
                   </tr>
                   
@@ -827,11 +1003,11 @@
                   <i class="fas fa-eye icon"></i>
                   <div class="stat-row">
                     <span class="stat-label">Passed</span>
-                    <span class="stat-value">400</span>
+                    <span class="stat-value">275</span>
                   </div>
                   <div class="stat-row">
                     <span class="stat-label">Failed</span>
-                    <span class="stat-value">8</span>
+                    <span class="stat-value">132</span>
                   </div>
                 </div>
               
@@ -842,11 +1018,11 @@
                   <i class="fas fa-redo icon"></i>
                   <div class="stat-row">
                     <span class="stat-label">Total</span>
-                    <span class="stat-value">1949</span>
+                    <span class="stat-value">54</span>
                   </div>
                   <div class="stat-row">
                     <span class="stat-label">Rate</span>
-                    <span class="stat-value">5.40/s</span>
+                    <span class="stat-value">0.28/s</span>
                   </div>
                 </div>
               
@@ -870,14 +1046,14 @@
                 <div class="stat-row">
                   <span class="stat-label">Total</span>
                   <span class="stat-value">
-                    
+                    302
                     
                   </span>
                 </div>
                 <div class="stat-row">
                   <span class="stat-label">Rate</span>
                   <span class="stat-value">
-                    
+                    1.56/s
                     
                   </span>
                 </div>
@@ -888,11 +1064,11 @@
                 <i class="fas fa-cloud-download-alt icon"></i>
                 <div class="stat-row">
                   <span class="stat-label">Total</span>
-                  <span class="stat-value">4.66 MB</span>
+                  <span class="stat-value">17.81 MB</span>
                 </div>
                 <div class="stat-row">
                   <span class="stat-label">Rate</span>
-                  <span class="stat-value">0.01 mB/s</span>
+                  <span class="stat-value">0.09 mB/s</span>
                 </div>
               </div>
 
@@ -901,7 +1077,7 @@
                 <i class="fas fa-cloud-upload-alt icon"></i>
                 <div class="stat-row">
                   <span class="stat-label">Total</span>
-                  <span class="stat-value">0.26 MB</span>
+                  <span class="stat-value">0.46 MB</span>
                 </div>
                 <div class="stat-row">
                   <span class="stat-label">Rate</span>
@@ -933,58 +1109,79 @@
                 
                   <tr class="checkDetails">
                     <td width="50%">WS status 101</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="good">37</td>
+                    <td class="">0</td>
+                    <td class="">100.00</td>
                   </tr>
                 
                   <tr class="checkDetails">
                     <td width="50%">STOMP connected</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="good">37</td>
+                    <td class="">0</td>
+                    <td class="">100.00</td>
                   </tr>
                 
                   <tr class="checkDetails">
                     <td width="50%">Subscribed /user/queue/reply</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="good">37</td>
+                    <td class="">0</td>
+                    <td class="">100.00</td>
                   </tr>
                 
                   <tr class="checkDetails">
                     <td width="50%">Subscribed /user/{groupId}/queue/reply</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="good">37</td>
+                    <td class="">0</td>
+                    <td class="">100.00</td>
                   </tr>
                 
                   <tr class="checkDetails">
                     <td width="50%">Sent root SIMPLE</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="good">37</td>
+                    <td class="">0</td>
+                    <td class="">100.00</td>
                   </tr>
                 
                   <tr class="checkDetails">
                     <td width="50%">Sent REPLY</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="">15</td>
+                    <td class="failed">22</td>
+                    <td class="failed">40.54</td>
                   </tr>
                 
                   <tr class="checkDetails">
                     <td width="50%">Sent sub-REPLY</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="">15</td>
+                    <td class="failed">22</td>
+                    <td class="failed">40.54</td>
+                  </tr>
+                
+                  <tr class="checkDetails">
+                    <td width="50%">Root matched (WS echo)</td>
+                    <td class="">15</td>
+                    <td class="failed">22</td>
+                    <td class="failed">40.54</td>
+                  </tr>
+                
+                  <tr class="checkDetails">
+                    <td width="50%">REPLY matched (WS echo)</td>
+                    <td class="">15</td>
+                    <td class="failed">22</td>
+                    <td class="failed">40.54</td>
+                  </tr>
+                
+                  <tr class="checkDetails">
+                    <td width="50%">Sub-REPLY matched (WS echo)</td>
+                    <td class="">15</td>
+                    <td class="failed">22</td>
+                    <td class="failed">40.54</td>
                   </tr>
                 
                   <tr class="checkDetails">
                     <td width="50%">Completed thread cycle</td>
-                    <td class="">50</td>
-                    <td class="failed">1</td>
-                    <td class="failed">98.04</td>
+                    <td class="">15</td>
+                    <td class="failed">22</td>
+                    <td class="failed">40.54</td>
                   </tr>
                 
               </tbody>
