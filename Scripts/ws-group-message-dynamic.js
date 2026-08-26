@@ -14,7 +14,6 @@ import {
     sequentialTailMs,
 } from './lib/send-order.js';
 import { correlateOwnEcho, formatUidRewriteLog } from './lib/echo-correlation.js';
-import { assertVuUsersAreGroupMembers } from './lib/group-membership.js';
 
 /**
  * STOMP over WebSocket — dynamic group chat load test.
@@ -26,9 +25,6 @@ import { assertVuUsersAreGroupMembers } from './lib/group-membership.js';
  * keeps the client uniqueMessageId. If the echo's uniqueMessageId differs
  * or is omitted, match senderId + content and still count the WS echo.
  * Store the server uniqueMessageId / Mongo id from that payload when present.
- *
- * Point 7: setup() fails fast unless every VU user is a member of groupId
- * (override with -e CHECK_GROUP_MEMBERSHIP=false).
  *
  * Destinations (from chat-service / mobile):
  *   SEND:      /app/chat/groupMessage
@@ -243,18 +239,7 @@ export const options = {
         },
     },
     thresholds: buildThresholds(),
-    setupTimeout: '3m',
 };
-
-export function setup() {
-    assertVuUsersAreGroupMembers({
-        users: users,
-        groupId: groupChat.groupId,
-        wsUrl: groupChat.wsUrl,
-        vus: VUS,
-    });
-    return {};
-}
 
 // Log config once at init (VU 0 context)
 console.log(

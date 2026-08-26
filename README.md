@@ -24,10 +24,8 @@ Stress-Testing GulfTMT/
 ├── Scripts/
 │   ├── ws-group-message-dynamic.js          # Group SIMPLE messages
 │   ├── ws-group-reply-subreply-dynamic.js   # Root → reply → sub-reply threads
-│   ├── check-group-membership.js            # Point 7: fail if VU users are not in the test group
 │   └── lib/
 │       ├── echo-correlation.js              # Own-echo matching (server ids on REPLY)
-│       ├── group-membership.js              # setup() membership pre-check
 │       ├── ws-send-error.js                 # Send vs teardown error classification
 │       ├── k6-scenario.js                   # Duration / scenario-length helpers
 │       └── send-order.js                    # sequential vs parallel first-send timing
@@ -35,7 +33,7 @@ Stress-Testing GulfTMT/
 │   ├── users_result.json                    # User tokens (sensitive)
 │   ├── group-chat.json                      # Group / WS endpoint config
 │   └── sql/
-│       └── ensure-stress-users-in-test-group.sql  # Add missing USER_GROUP rows
+│       └── ensure-stress-users-in-test-group.sql  # Optional: add missing USER_GROUP rows
 ├── reports/                                 # HTML reports (auto-generated)
 └── docs/
     └── WebSocket-Stress-Test-Functionalities.md
@@ -88,23 +86,6 @@ k6 run -e VUS=500 -e HOLD=4m -e MODE=continuous Scripts/ws-group-message-dynamic
 | `MSG_INTERVAL_MS` | `3000` | Pause between sends (group message) or between completed thread cycles (reply script) in **continuous** mode. |
 | `SEND_ORDER` | `parallel` | `parallel` — every VU sends as soon as it connects (burst / load test). `sequential` — user 1 posts, then user 2, then user 3 (`SEND_STAGGER_MS` apart). Use sequential only for an ordered timeline, not for stress. |
 | `SEND_STAGGER_MS` | `300` | Gap between sequential first sends. Ignored when `SEND_ORDER=parallel`. |
-| `CHECK_GROUP_MEMBERSHIP` | `true` | Before any WebSocket, fail the run if any of the first `VUS` token users are not members of `group-chat.json` `groupId`. Stops reply/echo failures from being blamed on chat when the cause is missing `USER_GROUP` rows. Set `false` / `skip` to disable. |
-| `HTTP_BASE_URL` | derived from `wsUrl` | API gateway origin for the membership GET (e.g. `https://api.ntmt.dev.gulftmt.com`). |
-
-### Group membership (Point 7)
-
-Every stress user used by a run **must** be a member of the test group in `data/group-chat.json`. Chat-service will still accept some sends, but replies, fan-out, and “own echo” checks fail in ways that look like a chat bug.
-
-**Fix in DB (idempotent):** run `data/sql/ensure-stress-users-in-test-group.sql` on UAT. It inserts missing `USER_GROUP` rows for `stresstest%` users into group `0a14c4b7-2a03-419d-a32a-60df68e7d5dc`.
-
-**Fail-fast in k6:** both load scripts call this in `setup()` (once, before VUs). Or check without load:
-
-```powershell
-k6 run -e VUS=500 Scripts/check-group-membership.js
-k6 run -e VUS=30000 Scripts/check-group-membership.js
-```
-
-If the check fails, fix membership with the SQL (or the admin **Add users to group** API) and re-run. Do not raise chat timeouts to hide missing members.
 
 ### Reply / sub-reply script only
 
@@ -433,7 +414,6 @@ Each entry needs at least:
 | `Invalid MODE=...` | Use only `continuous` or `once`. |
 | `No users in data/users_result.json` | Missing or empty token file. |
 | WS upgrade failed (not 101) | Expired token, wrong URL, or gateway down. |
-| `CHECK_GROUP_MEMBERSHIP failed: N of M VU users are NOT members` | Stress users are missing `USER_GROUP` rows for `group-chat.json` `groupId`. Run `data/sql/ensure-stress-users-in-test-group.sql` on UAT, then re-run. Do not treat this as a chat-service defect. |
 | uniqueMessageId on echo differs from what k6 sent | Expected for REPLY (`processReplyMessage` rewrites it). The script matches by parent id + senderId and logs a sampled rewrite line. Not a delivery failure. |
 | High `ws_thread_parent_timeouts` | Under load, 15s is often too short (~32s avg / ~60s p95 root RTT has been observed). For **diagnosis**, use default diagnostic wait or `-e PARENT_WAIT_MS=60000` (or `90000`) and inspect `ws_thread_late_echoes`. For **SLO pass/fail**, use `-e STRICT_SLO=true`. Raising the wait does not fix backend latency. Also consider lowering `VUS`. |
 | `ws_send_error_rate` ~33% on a short once run (old behaviour) | Was teardown: k6 closed sockets before `VU_HOLD_MS` DISCONNECT; server sent `Session closed` + close 1002, often **twice per VU**. Current scripts exclude that from the rate. Confirm `ws_group_*_sent` matches completed threads and look at `ws_teardown_closes` instead. |

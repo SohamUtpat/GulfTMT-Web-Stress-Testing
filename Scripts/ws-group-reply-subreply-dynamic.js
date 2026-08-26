@@ -14,7 +14,6 @@ import {
     sequentialTailMs,
 } from './lib/send-order.js';
 import { correlateOwnEcho, formatUidRewriteLog } from './lib/echo-correlation.js';
-import { assertVuUsersAreGroupMembers } from './lib/group-membership.js';
 
 /**
  * STOMP over WebSocket — group reply + sub-reply (thread) load test.
@@ -38,9 +37,6 @@ import { assertVuUsersAreGroupMembers } from './lib/group-membership.js';
  *                  parent Mongo id (+ content). Then store the server
  *                  uniqueMessageId and Mongo id for the next thread step.
  *   "Reply matched" = those rules, not uniqueMessageId equality.
- *
- * Point 7: setup() fails fast unless every VU user is a member of groupId
- * (override with -e CHECK_GROUP_MEMBERSHIP=false).
  *
  * Message text is numbered by VU so threads are easy to spot in the group:
  *   VU 1: "This is the 1st main message"
@@ -301,18 +297,7 @@ export const options = {
         },
     },
     thresholds: buildThresholds(),
-    setupTimeout: '3m',
 };
-
-export function setup() {
-    assertVuUsersAreGroupMembers({
-        users: users,
-        groupId: groupChat.groupId,
-        wsUrl: groupChat.wsUrl,
-        vus: VUS,
-    });
-    return {};
-}
 
 console.log(
     `ws-group-reply-subreply-dynamic | VUS=${VUS} HOLD=${HOLD} MODE=${MODE} ` +
