@@ -26,6 +26,11 @@ import { correlateOwnEcho, formatUidRewriteLog } from './lib/echo-correlation.js
  * or is omitted, match senderId + content and still count the WS echo.
  * Store the server uniqueMessageId / Mongo id from that payload when present.
  *
+ * Message text is numbered by VU so posts are easy to spot in the group
+ * (same root wording as ws-group-reply-subreply-dynamic.js):
+ *   VU 1 first send: "This is the 1st main message"
+ *   Later cycles:    "This is the 2nd main message from user 1"
+ *
  * Destinations (from chat-service / mobile):
  *   SEND:      /app/chat/groupMessage
  *   SUBSCRIBE: /user/queue/reply
@@ -358,28 +363,31 @@ function shouldLog() {
     return __VU <= 5 || __VU % step === 0;
 }
 
-// ASCII-only bodies (avoids accidental multi-byte content-length mistakes).
-const REALISTIC_MESSAGES = [
-    'Hey team, can someone share the latest status on this?',
-    'Just joined - catching up on the conversation now.',
-    'Sounds good, I will follow up after lunch.',
-    'Please review the document I shared earlier today.',
-    'Are we still meeting at 3 PM?',
-    'Thanks for the update, that clears things up.',
-    'I am on it - will post an update shortly.',
-    'Can we move this discussion to tomorrow morning?',
-    'Got it. I will check and get back to you.',
-    'Quick reminder: please submit your inputs by EOD.',
-    'Happy to help if anyone needs a second pair of eyes.',
-    'Confirmed on my side. Looking good so far.',
-    'Any blockers I should be aware of?',
-    'Let me know if you need anything else from me.',
-    'Great work everyone - appreciate the quick turnaround.',
-];
+function ordinal(n) {
+    const num = Number(n);
+    const mod100 = num % 100;
+    if (mod100 >= 11 && mod100 <= 13) {
+        return num + 'th';
+    }
+    switch (num % 10) {
+        case 1:
+            return num + 'st';
+        case 2:
+            return num + 'nd';
+        case 3:
+            return num + 'rd';
+        default:
+            return num + 'th';
+    }
+}
 
+/** ASCII-only bodies (avoids accidental multi-byte content-length mistakes). */
 function pickMessageContent(seq) {
-    const index = (__VU + (seq || 1) - 1) % REALISTIC_MESSAGES.length;
-    return REALISTIC_MESSAGES[index];
+    const cycle = seq || 1;
+    if (cycle <= 1) {
+        return `This is the ${ordinal(__VU)} main message`;
+    }
+    return `This is the ${ordinal(cycle)} main message from user ${__VU}`;
 }
 
 function buildGroupMessage(user, seq) {
