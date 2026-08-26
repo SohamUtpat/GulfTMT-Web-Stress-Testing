@@ -468,6 +468,18 @@ export default function () {
                         console.log(`VU${__VU} (${user.userName}) STOMP CONNECTED`);
                     }
 
+                    // Negotiated heart-beat 10000,10000 — send keepalives so ALB does not
+                    // idle-drop the socket during quiet periods between sends / echoes.
+                    socket.setInterval(function () {
+                        if (connected) {
+                            try {
+                                socket.send('\n');
+                            } catch (e) {
+                                // socket may already be closing
+                            }
+                        }
+                    }, 10000);
+
                     // Personal queue (direct / some server paths)
                     socket.send(
                         stompFrame('SUBSCRIBE', {
